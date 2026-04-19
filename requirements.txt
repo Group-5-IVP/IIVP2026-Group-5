@@ -1,6 +1,7 @@
 numpy
 tensorflow
 pandas
+torch
 torchvision
 pathlib
 matplotlib
