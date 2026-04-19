@@ -2,6 +2,7 @@ numpy
 tensorflow
 pandas
 torch
+Pillow
 torchvision
 pathlib
 matplotlib

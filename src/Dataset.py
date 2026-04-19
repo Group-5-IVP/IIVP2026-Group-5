@@ -1,30 +1,56 @@
-
 from pathlib import Path
 import pandas as pd
 import torch
-from torch.utils.data import Dataset
 from torchvision.transforms import v2
 from PIL import Image
 
+test_csv_path = f"{Path(__file__).parent.parent}/resources/test.csv"
+train_csv_path = f"{Path(__file__).parent.parent}/resources/train.csv"
+test_img_folder_path = f"{Path(__file__).parent.parent}/resources/test/test"
+trian_img_folder_path = f"{Path(__file__).parent.parent}/resources/train/train"
 
-class HindiDigitsDataset(Dataset):
-    def __init__(self, csv_path: str, img_dir: str, transform=None):
+class DigitDataset:
+    def __init__(self, csv_path:str, img_path: str, transform=None):
         self.df = pd.read_csv(csv_path)
-        self.img_dir = Path(img_dir)
         self.transform = transform
+        self.csv_path = csv_path
+        self.img_path = img_path
 
     def __len__(self) -> int:
         return len(self.df)
 
     def __getitem__(self, idx: int):
         row = self.df.iloc[idx]
-        img_path = self.img_dir / row["filename"]  # adjust column name if different
-        img = Image.open(img_path).convert("L")  # "L" = grayscale; use "RGB" if 3-channel
-        label = int(row["label"])  # adjust column name if different
+        label = int(row["Category"])
+        img_path = f"{self.img_path}/{label}/{row["Id"]}.png"
+        img = Image.open(img_path).convert("L")  # "L" = grayscale
 
         if self.transform is not None:
             img = self.transform(img)
 
-        return img, label
+        return img, label #image is a tensor if transform defined
 
+def _build_train_transform():
+    return v2.Compose([v2.Grayscale(num_output_channels=1),
+        v2.Resize((32, 32)),
+        v2.RandomAffine(degrees=10, translate=(0.1, 0.1), scale=(0.9, 1.1), shear=5),
+        v2.ElasticTransform(alpha=8.0, sigma=4.0),
+        v2.ColorJitter(brightness=0.2, contrast=0.2),
+        v2.ToImage(),
+        v2.ToDtype(torch.float32, scale=True),
+        v2.Normalize(mean=[0.5], std=[0.5]),
+        v2.RandomErasing(p=0.25, scale=(0.02, 0.15)),
+       ])
+
+def _build_eval_transform():
+    return v2.Compose([
+        v2.Grayscale(num_output_channels=1),
+        v2.Resize((32, 32)),
+        v2.ToImage(),
+        v2.ToDtype(torch.float32, scale=True),
+        v2.Normalize(mean=[0.5], std=[0.5]),
+    ])
+
+if __name__ == '__main__':
+    ds = DigitDataset(train_csv_path, trian_img_folder_path, transform=_build_train_transform())
 
