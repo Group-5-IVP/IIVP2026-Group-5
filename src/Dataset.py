@@ -9,6 +9,7 @@ from tqdm import tqdm
 from torch.utils.data import random_split
 
 
+import datasetStats as stats
 
 test_csv_path = f"{Path(__file__).parent.parent}/resources/test.csv"
 train_csv_path = f"{Path(__file__).parent.parent}/resources/train.csv"
@@ -45,8 +46,8 @@ def _build_train_transform():
         v2.ElasticTransform(alpha=8.0, sigma=4.0),
         v2.ColorJitter(brightness=0.2, contrast=0.2),
         v2.ToImage(),
-        v2.ToDtype(torch.float32, scale=True),
-        v2.Normalize(mean=[0.5], std=[0.5]),
+        v2.ToDtype(torch.float32, scale=True), # it performs scaling from [0,255] to [0, 1]
+        v2.Normalize(mean=[stats.mean], std=[stats.std]), # normalize for NN for training to [-1, 1] with mean 0
         v2.RandomErasing(p=0.25, scale=(0.02, 0.15)),
        ])
 
@@ -56,7 +57,7 @@ def _build_eval_transform():
         v2.Resize((32, 32)),
         v2.ToImage(),
         v2.ToDtype(torch.float32, scale=True),
-        v2.Normalize(mean=[0.5], std=[0.5]),
+        v2.Normalize(mean=[stats.mean], std=[stats.std]),
     ])
 
 def _build_model():
