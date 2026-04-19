@@ -21,7 +21,9 @@ class DigitDataset:
 
     def __getitem__(self, idx: int):
         row = self.df.iloc[idx]
-        label = int(row["Category"])
+        label = -1
+        if "Category" in self.df.columns:
+            label = int(row["Category"])
         img_path = f"{self.img_path}/{label}/{row["Id"]}.png"
         img = Image.open(img_path).convert("L")  # "L" = grayscale
 
