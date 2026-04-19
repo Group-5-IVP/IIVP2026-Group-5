@@ -51,7 +51,7 @@ def _build_eval_transform():
         v2.Resize((32, 32)),
         v2.ToImage(),
         v2.ToDtype(torch.float32, scale=True),
-        v2.Normalize(mean=[0.5], std=[0.5]),
+        v2.Normalize(mean=[stats.mean], std=[stats.std]),
     ])
 
 if __name__ == '__main__':
