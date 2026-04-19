@@ -1,23 +1,32 @@
 import torch
 from torch.utils.data import DataLoader, random_split
-from torchvision.models import efficientnet_b0
 from tqdm import tqdm
-
+from torchvision.models import resnet18, efficientnet_b0, mobilenet_v3_small
 from Dataset import DigitDataset, _build_train_transform, _build_eval_transform, train_csv_path, trian_img_folder_path
 
 
-def _build_model():
-    model = efficientnet_b0()
-    model.conv1 = torch.nn.Conv2d(in_channels=1, out_channels=64, kernel_size=7, stride=2, padding=3, bias=False)
-    in_features = model.fc.in_features
-    model.fc = torch.nn.Linear(in_features, 10)
+def _build_model(architecture: str = "resnet18"):
+    num_classes = 10
+
+    if architecture == "resnet18":
+        model = resnet18()
+        model.conv1 = torch.nn.Conv2d(1, 64, kernel_size=3, stride=1, padding=1, bias=False)
+        model.fc = torch.nn.Linear(model.fc.in_features, num_classes)
+    elif architecture == "efficientnet_b0":
+        model = efficientnet_b0()
+        model.features[0][0] = torch.nn.Conv2d(1, 32, kernel_size=3, stride=1, padding=1, bias=False)
+        model.classifier[1] = torch.nn.Linear(model.classifier[1].in_features, num_classes)
+    elif architecture == "mobilenet_v3_small":
+        model = mobilenet_v3_small()
+        model.features[0][0] = torch.nn.Conv2d(1, 16, kernel_size=3, stride=1, padding=1, bias=False)
+        model.classifier[3] = torch.nn.Linear(model.classifier[3].in_features, num_classes)
     return model
 
 
 if __name__ == '__main__':
     train_ds = DigitDataset(train_csv_path, trian_img_folder_path, transform=_build_train_transform())
 
-    model = _build_model()
+    model = _build_model("efficientnet_b0")
     loss_function = torch.nn.CrossEntropyLoss()
     optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.9)
 
