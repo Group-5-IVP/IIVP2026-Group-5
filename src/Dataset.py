@@ -4,20 +4,24 @@ import torch
 from torchvision.transforms import v2
 from PIL import Image
 from torch.utils.data import Dataset
-
 import datasetStats as stats
 
 test_csv_path = f"{Path(__file__).parent.parent}/resources/test.csv"
 train_csv_path = f"{Path(__file__).parent.parent}/resources/train.csv"
 test_img_folder_path = f"{Path(__file__).parent.parent}/resources/test/test"
-trian_img_folder_path = f"{Path(__file__).parent.parent}/resources/train/train"
+train_img_folder_path = f"{Path(__file__).parent.parent}/resources/train/train"
 
 class DigitDataset(Dataset):
-    def __init__(self, csv_path:str, img_path: str, transform=None, df=None):
+    def __init__(self, csv_path:str, img_path: str, transform=None, df=None, preload=True):
         if df is None:
             self.df = pd.read_csv(csv_path)
         else:
             self.df = df
+        if preload and 'Category' in df.columns:
+            self.images = [Image.open(f"{img_path}/{int(r.Category)}/{r.Id}.png").convert("L").copy()
+                           for r in self.df.itertuples()]
+        else:
+            self.images = None
         self.transform = transform
         self.csv_path = csv_path
         self.img_path = img_path
@@ -30,16 +34,21 @@ class DigitDataset(Dataset):
         label = -1
         if "Category" in self.df.columns:
             label = int(row["Category"])
-        if label != -1:
-            img_path = f"{self.img_path}/{label}/{row['Id']}.png"
+
+        # Use preloaded image if available, otherwise load from disk
+        if self.images is not None:
+            img = self.images[idx].copy()  # copy to avoid transform mutating cached image
         else:
-            img_path = f"{self.img_path}/{row['Id']}.png"
-        img = Image.open(img_path).convert("L")  # "L" = grayscale
+            if label != -1:
+                img_path = f"{self.img_path}/{label}/{row['Id']}.png"
+            else:
+                img_path = f"{self.img_path}/{row['Id']}.png"
+            img = Image.open(img_path).convert("L")
 
         if self.transform is not None:
             img = self.transform(img)
 
-        return img, label #image is a tensor if transform defined
+        return img, label
 
 
 def _build_train_transform():
@@ -49,8 +58,8 @@ def _build_train_transform():
         v2.ElasticTransform(alpha=8.0, sigma=4.0),
         v2.ColorJitter(brightness=0.2, contrast=0.2),
         v2.ToImage(),
-        v2.ToDtype(torch.float32, scale=True), # it performs scaling from [0,255] to [0, 1]
-        v2.Normalize(mean=[stats.mean], std=[stats.std]), # normalize for NN for training to [-1, 1] with mean 0
+        v2.ToDtype(torch.float32, scale=True),
+        v2.Normalize(mean=[stats.mean], std=[stats.std]),
         v2.RandomErasing(p=0.25, scale=(0.02, 0.15)),
        ])
 

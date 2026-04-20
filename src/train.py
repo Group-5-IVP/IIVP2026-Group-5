@@ -2,13 +2,13 @@ import torch
 from torch.utils.data import DataLoader, random_split
 from tqdm import tqdm
 from torchvision.models import resnet18, efficientnet_b0, mobilenet_v3_small
-from Dataset import DigitDataset, _build_train_transform, _build_eval_transform, train_csv_path, trian_img_folder_path
+from Dataset import DigitDataset, _build_train_transform, _build_eval_transform, train_csv_path, train_img_folder_path
+
 
 
 
 def _build_model(architecture: str = "resnet18"):
     num_classes = 10
-
     if architecture == "resnet18":
         model = resnet18()
         model.conv1 = torch.nn.Conv2d(1, 64, kernel_size=3, stride=1, padding=1, bias=False)
@@ -32,7 +32,7 @@ if __name__ == '__main__':
     )
 
     print(f"Using device: {device}")
-    train_ds = DigitDataset(train_csv_path, trian_img_folder_path, transform=_build_train_transform())
+    train_ds = DigitDataset(train_csv_path, train_img_folder_path, transform=_build_train_transform())
 
     model = _build_model("mobilenet_v3_small")
     loss_function = torch.nn.CrossEntropyLoss()
