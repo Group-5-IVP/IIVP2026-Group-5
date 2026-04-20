@@ -3,6 +3,7 @@ import pandas as pd
 import torch
 from torchvision.transforms import v2
 from PIL import Image
+from torch.utils.data import Dataset
 
 import datasetStats as stats
 
@@ -11,9 +12,12 @@ train_csv_path = f"{Path(__file__).parent.parent}/resources/train.csv"
 test_img_folder_path = f"{Path(__file__).parent.parent}/resources/test/test"
 trian_img_folder_path = f"{Path(__file__).parent.parent}/resources/train/train"
 
-class DigitDataset:
-    def __init__(self, csv_path:str, img_path: str, transform=None):
-        self.df = pd.read_csv(csv_path)
+class DigitDataset(Dataset):
+    def __init__(self, csv_path:str, img_path: str, transform=None, df=None):
+        if df is None:
+            self.df = pd.read_csv(csv_path)
+        else:
+            self.df = df
         self.transform = transform
         self.csv_path = csv_path
         self.img_path = img_path
@@ -26,13 +30,17 @@ class DigitDataset:
         label = -1
         if "Category" in self.df.columns:
             label = int(row["Category"])
-        img_path = f"{self.img_path}/{label}/{row['Id']}.png"
+        if label != -1:
+            img_path = f"{self.img_path}/{label}/{row['Id']}.png"
+        else:
+            img_path = f"{self.img_path}/{row['Id']}.png"
         img = Image.open(img_path).convert("L")  # "L" = grayscale
 
         if self.transform is not None:
             img = self.transform(img)
 
         return img, label #image is a tensor if transform defined
+
 
 def _build_train_transform():
     return v2.Compose([v2.Grayscale(num_output_channels=1),

@@ -5,6 +5,7 @@ from torchvision.models import resnet18, efficientnet_b0, mobilenet_v3_small
 from Dataset import DigitDataset, _build_train_transform, _build_eval_transform, train_csv_path, trian_img_folder_path
 
 
+
 def _build_model(architecture: str = "resnet18"):
     num_classes = 10
 
@@ -24,9 +25,16 @@ def _build_model(architecture: str = "resnet18"):
 
 
 if __name__ == '__main__':
+    device = (
+        "mps" if torch.backends.mps.is_available()
+        else "cuda" if torch.cuda.is_available()
+        else "cpu"
+    )
+
+    print(f"Using device: {device}")
     train_ds = DigitDataset(train_csv_path, trian_img_folder_path, transform=_build_train_transform())
 
-    model = _build_model("efficientnet_b0")
+    model = _build_model("mobilenet_v3_small")
     loss_function = torch.nn.CrossEntropyLoss()
     optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.9)
 

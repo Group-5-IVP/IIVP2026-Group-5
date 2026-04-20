@@ -1,6 +1,4 @@
-import torch
 import torch.nn as nn
-
 
 # one conv block to be used in CNNs- 2 conv layers with batch norm and relu, followed by max pooling
 class ConvBlock(nn.Module):
