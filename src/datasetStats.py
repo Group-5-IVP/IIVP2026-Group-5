@@ -28,6 +28,3 @@ def compute_stats():
     std = (total_sq_sum / total_pixels - mean ** 2) ** 0.5
     print(f"mean={mean:.4f}, std={std:.4f}")
     return mean, std
-
-if __name__ == '__main__':
-    compute_stats()

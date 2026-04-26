@@ -8,7 +8,7 @@ import torch
 import torch.nn as nn
 from predict import _predict_probs, _get_device
 
-def k_fold_validation(df: pd.DataFrame, model_class: type[nn.Module], use_tta, k_folds=4, epochs=5, batch_size=128, lr=0.01):
+def k_fold_validation(df: pd.DataFrame, model_fn, use_tta=False, k_folds=4, epochs=5, batch_size=128, lr=0.01):
     device = _get_device()
 
     y = df['Category'].tolist()
@@ -30,7 +30,7 @@ def k_fold_validation(df: pd.DataFrame, model_class: type[nn.Module], use_tta, k
 
         train_loader = DataLoader(train_subset, batch_size=batch_size, shuffle=True)
 
-        model = model_class().to(device)
+        model = model_fn().to(device)
         optimizer = torch.optim.Adam(model.parameters(), lr=lr)
         loss_fn = nn.CrossEntropyLoss()
 

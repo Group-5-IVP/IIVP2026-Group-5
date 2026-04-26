@@ -1,5 +1,7 @@
 import torch.nn as nn
 import torch
+from torchvision.models import resnet18
+from functools import partial
 from pathlib import Path
 import pandas as pd
 from torch.utils.data import DataLoader
@@ -16,7 +18,7 @@ def save_model(model, file_name):
 def load_model(path, weights_only=True):
     return torch.load(path, weights_only=weights_only)
 
-def train_model(model_class, epochs=10, df=None, batch_size=128, device=None):
+def train_model(model_fn, epochs=10, df=None, batch_size=128, device=None):
     if df is None:
         train_df = pd.read_csv(train_csv_path)
     else:
@@ -34,8 +36,9 @@ def train_model(model_class, epochs=10, df=None, batch_size=128, device=None):
                              transform=_build_train_transform(),
                              df=train_df)
     loader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
-    model = model_class().to(device)
-    model = torch.compile(model)
+    model = model_fn().to(device)
+    if device.type == 'cuda':
+        model = torch.compile(model)
     optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.9, weight_decay=1e-4)
     loss_fn = nn.CrossEntropyLoss()
     model.train()
@@ -48,7 +51,6 @@ def train_model(model_class, epochs=10, df=None, batch_size=128, device=None):
             loss.backward()
             optimizer.step()
     return model
-
 
 # one conv block to be used in CNNs- 2 conv layers with batch norm and relu, followed by max pooling
 class ConvBlock(nn.Module):
@@ -71,6 +73,12 @@ class ConvBlock(nn.Module):
     def forward(self, x):
         return self.block(x)
 
+def build_resnet18(num_classes=10):
+    model = resnet18(weights=None)
+    model.conv1 = nn.Conv2d(1, 64, kernel_size=3, stride=1, padding=1, bias=False)
+    model.maxpool = nn.Identity()
+    model.fc = nn.Linear(model.fc.in_features, num_classes)
+    return model
 
 class SimpleCNN(nn.Module):
     def __init__(self, num_classes=10, filters=(32, 64, 128), dropout=0.4,n_convs=2, use_stride=False, dilation=1):
