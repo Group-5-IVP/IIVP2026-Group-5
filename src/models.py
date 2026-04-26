@@ -35,6 +35,7 @@ def train_model(model_class, epochs=10, df=None, batch_size=128, device=None):
                              df=train_df)
     loader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
     model = model_class().to(device)
+    model = torch.compile(model)
     optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.9, weight_decay=1e-4)
     loss_fn = nn.CrossEntropyLoss()
     model.train()
@@ -113,3 +114,77 @@ class FastCNN(nn.Module):
         )
     def forward(self, x):
         return self.classifier(self.features(x))
+
+
+class SEBlock(nn.Module):
+    def __init__(self, channels, reduction=16):
+        super().__init__()
+        mid = max(channels // reduction, 4)
+        self.pool = nn.AdaptiveAvgPool2d(1)
+        self.fc = nn.Sequential(
+            nn.Linear(channels, mid),
+            nn.ReLU(),
+            nn.Linear(mid, channels),
+            nn.Sigmoid(),
+        )
+
+    def forward(self, x):
+        b, c, _, _ = x.shape
+        w = self.pool(x).view(b, c)
+        w = self.fc(w).view(b, c, 1, 1)
+        return x * w
+
+
+class ResBlock(nn.Module):
+    def __init__(self, in_ch, out_ch, use_se=False, se_reduction=16):
+        super().__init__()
+        self.conv1 = nn.Conv2d(in_ch, out_ch, 3, padding=1, bias=False)
+        self.bn1 = nn.BatchNorm2d(out_ch)
+        self.conv2 = nn.Conv2d(out_ch, out_ch, 3, padding=1, bias=False)
+        self.bn2 = nn.BatchNorm2d(out_ch)
+        self.relu = nn.ReLU()
+
+        self.shortcut = (
+            nn.Sequential(
+                nn.Conv2d(in_ch, out_ch, 1, bias=False),
+                nn.BatchNorm2d(out_ch),
+            )
+            if in_ch != out_ch
+            else nn.Identity()
+        )
+
+        self.se = SEBlock(out_ch, se_reduction) if use_se else nn.Identity()
+
+    def forward(self, x):
+        out = self.relu(self.bn1(self.conv1(x)))
+        out = self.se(self.bn2(self.conv2(out)))
+        return self.relu(out + self.shortcut(x))
+
+
+class ResNet(nn.Module):
+    def __init__(self, num_classes=10, filters=(32, 64, 128), dropout=0.4,use_se=False, se_reduction=16, blocks_per_stage=2):
+        super().__init__()
+        self.stem = nn.Sequential(
+            nn.Conv2d(1, filters[0], 3, padding=1, bias=False),
+            nn.BatchNorm2d(filters[0]),
+            nn.ReLU(),
+        )
+
+        stages = []
+        in_ch = filters[0]
+        for out_ch in filters:
+            for _ in range(blocks_per_stage):
+                stages.append(ResBlock(in_ch, out_ch, use_se=use_se, se_reduction=se_reduction))
+                in_ch = out_ch
+            stages.append(nn.MaxPool2d(2))
+        self.stages = nn.Sequential(*stages)
+
+        self.head = nn.Sequential(
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten(),
+            nn.Dropout(dropout),
+            nn.Linear(filters[-1], num_classes),
+        )
+
+    def forward(self, x):
+        return self.head(self.stages(self.stem(x)))
