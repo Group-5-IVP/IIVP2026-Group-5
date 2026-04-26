@@ -1,13 +1,13 @@
 import torch.nn as nn
 import torch
 from torchvision.models import resnet18
-from functools import partial
 from pathlib import Path
 import pandas as pd
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-
-from Dataset import train_csv_path, DigitDataset, train_img_folder_path, _build_train_transform
+from Dataset import train_csv_path, DigitDataset, train_img_folder_path
+from augmentation import _build_train_transform
+from predict import _predict_probs
 
 nn_models_dir = f"{Path(__file__).parent.parent}/outputs/nn_models"
 
@@ -18,7 +18,7 @@ def save_model(model, file_name):
 def load_model(path, weights_only=True):
     return torch.load(path, weights_only=weights_only)
 
-def train_model(model_fn, epochs=10, df=None, batch_size=128, device=None):
+def train_model(model_fn, epochs=10, df=None, lr = 0.01, batch_size=128, device=None):
     if df is None:
         train_df = pd.read_csv(train_csv_path)
     else:
@@ -39,7 +39,7 @@ def train_model(model_fn, epochs=10, df=None, batch_size=128, device=None):
     model = model_fn().to(device)
     if device.type == 'cuda':
         model = torch.compile(model)
-    optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.9, weight_decay=1e-4)
+    optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=1e-4)
     loss_fn = nn.CrossEntropyLoss()
     model.train()
     for epoch in range(epochs):
@@ -51,6 +51,34 @@ def train_model(model_fn, epochs=10, df=None, batch_size=128, device=None):
             loss.backward()
             optimizer.step()
     return model
+
+def evaluate_model(model, val_df:pd.DataFrame, batch_size, use_tta, device=None):
+    if device is None:
+        device = torch.device(
+            'mps' if torch.backends.mps.is_available()
+            else 'cuda' if torch.cuda.is_available()
+            else 'cpu'
+        )
+    avg_probs = _predict_probs(
+        model, val_df, train_img_folder_path, train_csv_path,
+        device=device, batch_size=batch_size, use_tta=use_tta,
+    )
+    pred = avg_probs.argmax(dim=1)
+    targets = torch.tensor(val_df['Category'].tolist())
+    return (pred == targets).float().mean().item() * 100
+
+def train_and_evaluate(model_fn, train_df:pd.DataFrame, val_df, epochs, batch_size, lr, use_tta, device=None):
+    if device is None:
+        device = torch.device(
+            'mps' if torch.backends.mps.is_available()
+            else 'cuda' if torch.cuda.is_available()
+            else 'cpu'
+        )
+    model = train_model(
+        model_fn, df=train_df, epochs=epochs, lr=lr,
+        batch_size=batch_size, device=device,
+    )
+    return evaluate_model(model=model, val_df=val_df, batch_size=batch_size, use_tta=use_tta, device=device)
 
 # one conv block to be used in CNNs- 2 conv layers with batch norm and relu, followed by max pooling
 class ConvBlock(nn.Module):

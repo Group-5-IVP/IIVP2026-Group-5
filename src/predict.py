@@ -1,7 +1,8 @@
 import pandas as pd
 import torch
 from torch.utils.data import DataLoader
-from Dataset import test_csv_path, test_img_folder_path, DigitDataset, _build_eval_transform, _build_tta_transform
+from Dataset import test_csv_path, test_img_folder_path, DigitDataset
+from augmentation import _build_eval_transform, _build_tta_transform
 from pathlib import Path
 from utils import _get_device
 
