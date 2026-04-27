@@ -11,7 +11,7 @@ from validation import simple_validation
 from pathlib import Path
 
 OUT_DIR = Path(__file__).parent.parent / "outputs"
-OUT_DIR.mkdir(exist_ok=True)
+OUT_DIR.mkdir(parents=True, exist_ok=True)
 RESULTS_PATH = OUT_DIR / "aug_search.jsonl"
 
 BASE = [v2.Grayscale(1), v2.Resize((32, 32))]
@@ -77,15 +77,16 @@ def make_transform(affine=None, elastic=None, jitter=None, stroke=None, erase=No
     return v2.Compose(BASE + pil + TO_TENSOR + tail)
 
 def run_search(df, model_fn, configs, out=RESULTS_PATH, epochs=10):
-    import augmentation
+    import models
     for cfg in configs:
-        name = cfg.pop("name")
-        augmentation._build_train_transform = lambda c=cfg: make_transform(**c)
+        name = cfg["name"]
+        cfg_params = {k: v for k, v in cfg.items() if k != "name"}
+        models._build_train_transform = lambda c=cfg_params: make_transform(**c)
         t0 = time.time()
         acc = simple_validation(df, model_fn, epochs=epochs)
         with open(out, "a") as f:
-            f.write(json.dumps({"name": name, "cfg": cfg, "acc": acc, "sec": int(time.time()-t0)}) + "\n")
+            f.write(json.dumps({"name": name, "cfg": cfg_params, "acc": acc, "sec": int(time.time()-t0)}) + "\n")
         print(f"{name}: {acc:.2f}%")
 
 if __name__ == '__main__':
-    run_search(pd.read_csv(train_csv_path), SimpleCNN, CONFIGS)
+    run_search(pd.read_csv(train_csv_path), SimpleCNN, CONFIGS, epochs=10)
