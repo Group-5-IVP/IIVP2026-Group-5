@@ -38,18 +38,25 @@ def train_model(model_fn, epochs=10, df=None, lr = 0.01, batch_size=128, device=
     loader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
     model = model_fn().to(device)
     if device.type == 'cuda':
-        model = torch.compile(model)
+        try:
+            model = torch.compile(model)
+        except Exception:
+            pass  # torch.compile not supported (e.g., Windows)
     optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=1e-4)
     loss_fn = nn.CrossEntropyLoss()
+    use_amp = device.type == 'cuda'
+    scaler = torch.amp.GradScaler(enabled=use_amp)
     model.train()
     for epoch in range(epochs):
         for images, targets in tqdm(loader, desc=f"Epoch {epoch + 1}"):
             images = images.to(device, non_blocking=True)
             targets = targets.to(device, non_blocking=True)
             optimizer.zero_grad(set_to_none=True)
-            loss = loss_fn(model(images), targets)
-            loss.backward()
-            optimizer.step()
+            with torch.autocast(device.type, enabled=use_amp):
+                loss = loss_fn(model(images), targets)
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
     return model
 
 def evaluate_model(model, val_df:pd.DataFrame, batch_size, use_tta, device=None):
