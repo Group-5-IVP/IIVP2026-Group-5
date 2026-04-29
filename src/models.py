@@ -1,3 +1,4 @@
+import sys
 import torch.nn as nn
 import torch
 from torchvision.models import resnet18
@@ -37,11 +38,8 @@ def train_model(model_fn, epochs=10, df=None, lr = 0.01, batch_size=128, device=
                              df=train_df)
     loader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
     model = model_fn().to(device)
-    if device.type == 'cuda':
-        try:
-            model = torch.compile(model)
-        except Exception:
-            pass  # torch.compile not supported (e.g., Windows)
+    if device.type == 'cuda' and sys.platform != 'win32':
+        model = torch.compile(model)
     optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=1e-4)
     loss_fn = nn.CrossEntropyLoss()
     use_amp = device.type == 'cuda'
