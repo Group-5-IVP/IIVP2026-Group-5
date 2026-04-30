@@ -3,9 +3,9 @@ from torchvision.transforms import v2
 import torch
 import torch.nn.functional as F
 import pandas as pd
-from Dataset import train_csv_path
+from dataset import train_csv_path
 from augmentation import random_stroke
-from datasetStats import mean, std
+from stats import mean, std
 from models import SimpleCNN
 from validation import simple_validation
 from pathlib import Path

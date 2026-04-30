@@ -1,7 +1,7 @@
 from torchvision.transforms import v2
 import torch
 import torch.nn.functional as F
-from datasetStats import mean, std
+from stats import mean, std
 import random
 
 rng = random.Random(42)

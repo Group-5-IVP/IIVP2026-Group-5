@@ -2,7 +2,7 @@ from pathlib import Path
 import pandas as pd
 from PIL import Image
 from torch.utils.data import Dataset
-import datasetStats as stats
+import stats as stats
 
 test_csv_path = f"{Path(__file__).parent.parent}/resources/test.csv"
 train_csv_path = f"{Path(__file__).parent.parent}/resources/train.csv"

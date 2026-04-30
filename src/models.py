@@ -6,9 +6,11 @@ from pathlib import Path
 import pandas as pd
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-from Dataset import train_csv_path, DigitDataset, train_img_folder_path
+from dataset import train_csv_path, DigitDataset, train_img_folder_path
 from augmentation import _build_train_transform
 from predict import _predict_probs
+import random
+import numpy as np
 
 nn_models_dir = f"{Path(__file__).parent.parent}/outputs/nn_models"
 
@@ -19,7 +21,8 @@ def save_model(model, file_name):
 def load_model(path, weights_only=True):
     return torch.load(path, weights_only=weights_only)
 
-def train_model(model_fn, epochs=10, df=None, lr = 0.01, batch_size=128, device=None):
+def train_model(model_fn, epochs=10, seed=42, df=None, lr = 0.01, batch_size=128, device=None):
+    _set_seed(seed)
     if df is None:
         train_df = pd.read_csv(train_csv_path)
     else:
@@ -36,21 +39,26 @@ def train_model(model_fn, epochs=10, df=None, lr = 0.01, batch_size=128, device=
                              img_path=train_img_folder_path,
                              transform=_build_train_transform(),
                              df=train_df)
-    loader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
+    loader = DataLoader(train_set,
+                        batch_size=batch_size,
+                        shuffle=True,
+                        num_workers=2,
+                        persistent_workers=True)
     model = model_fn().to(device)
     if device.type == 'cuda' and sys.platform != 'win32':
         model = torch.compile(model)
     optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=1e-4)
     loss_fn = nn.CrossEntropyLoss()
-    use_amp = device.type == 'cuda'
-    scaler = torch.amp.GradScaler(enabled=use_amp)
+    use_amp = device.type in ('cuda', 'mps')
+    scaler = torch.amp.GradScaler(enabled = device.type == 'cuda')
     model.train()
     for epoch in range(epochs):
         for images, targets in tqdm(loader, desc=f"Epoch {epoch + 1}"):
             images = images.to(device, non_blocking=True)
             targets = targets.to(device, non_blocking=True)
             optimizer.zero_grad(set_to_none=True)
-            with torch.autocast(device.type, enabled=use_amp):
+            amp_dtype = torch.float16 if device.type == 'cuda' else torch.bfloat16
+            with torch.autocast(device_type=device.type, enabled=use_amp, dtype=amp_dtype):
                 loss = loss_fn(model(images), targets)
             scaler.scale(loss).backward()
             scaler.step(optimizer)
@@ -72,7 +80,7 @@ def evaluate_model(model, val_df:pd.DataFrame, batch_size, use_tta, device=None)
     targets = torch.tensor(val_df['Category'].tolist())
     return (pred == targets).float().mean().item() * 100
 
-def train_and_evaluate(model_fn, train_df:pd.DataFrame, val_df, epochs, batch_size, lr, use_tta, device=None):
+def train_and_evaluate(model_fn, train_df, val_df, epochs, batch_size, lr, use_tta, device=None):
     if device is None:
         device = torch.device(
             'mps' if torch.backends.mps.is_available()
@@ -135,27 +143,6 @@ class SimpleCNN(nn.Module):
         x = self.features(x)
         x = self.head(x)
         return x
-
-class FastCNN(nn.Module):
-    def __init__(self, num_classes=10):
-        super().__init__()
-        self.features = nn.Sequential(
-            nn.Conv2d(1, 16, 5, padding=2),
-            nn.GELU(),
-            nn.MaxPool2d(2),
-            nn.Conv2d(16, 32, 3, padding=1),
-            nn.GELU(),
-            nn.MaxPool2d(2)
-        )
-        self.classifier = nn.Sequential(
-            nn.Flatten(),
-            nn.Linear(32 * 8 * 8, 128),
-            nn.GELU(),
-            nn.Linear(128, num_classes)
-        )
-    def forward(self, x):
-        return self.classifier(self.features(x))
-
 
 class SEBlock(nn.Module):
     def __init__(self, channels, reduction=16):
@@ -229,3 +216,9 @@ class ResNet(nn.Module):
 
     def forward(self, x):
         return self.head(self.stages(self.stem(x)))
+
+def _set_seed(seed: int):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)

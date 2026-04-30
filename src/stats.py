@@ -1,5 +1,5 @@
 from pathlib import Path
-import Dataset as ds
+import dataset as ds
 from torchvision.transforms import v2
 import torch
 

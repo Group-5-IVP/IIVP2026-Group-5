@@ -8,3 +8,4 @@ pathlib
 matplotlib
 tqdm
 scikit-learn
+pytorchcv
