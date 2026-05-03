@@ -1,19 +1,17 @@
 import pandas as pd
 import torch
 from torch.utils.data import DataLoader
-from dataset import test_csv_path, test_img_folder_path, DigitDataset
+from dataset import test_csv_path, train_img_folder_path, test_img_folder_path, DigitDataset
 from augmentation import _build_eval_transform, _build_tta_transform
 from pathlib import Path
 from utils import _get_device
 
 csv_results_dir = Path(__file__).parent.parent/'outputs'/'csv_results'
 
-def predict_test_ensemble(models:list, test_df = None,use_tta=False, batch_size=128):
-    if test_df is None:
-        test_df = pd.read_csv(test_csv_path)
+def predict_ensemble(models:list, test_df, imgs_path, use_tta=False, batch_size=128):
     all_df_probs = []
     for model in models:
-        pred = predict_test(model, test_df, use_tta, batch_size)
+        pred = predict(model, imgs_path, test_df, use_tta, batch_size)
         all_df_probs.append(pred[1])
     prob_cols = [f'prob_{i}' for i in range(10)]
     avg_df_probs = all_df_probs[0].copy()
@@ -24,7 +22,7 @@ def predict_test_ensemble(models:list, test_df = None,use_tta=False, batch_size=
     return df, avg_df_probs
 
 
-def predict_test(model, test_df=None, use_tta=False, batch_size=128):
+def predict(model, imgs_path, test_df=None, use_tta=False, batch_size=128):
     #device selection and model loading
     device = _get_device()
     #dataset selection
@@ -33,7 +31,7 @@ def predict_test(model, test_df=None, use_tta=False, batch_size=128):
     model = model.to(device)
     avg_probs = _predict_probs(model,
                                test_df,
-                               test_img_folder_path,
+                               imgs_path,
                                test_csv_path, device,
                                batch_size=batch_size,
                                use_tta=use_tta)

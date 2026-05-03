@@ -18,12 +18,15 @@ def simple_validation(df: pd.DataFrame, model_fn, use_tta=False, epochs=10, trai
     return acc
 
 
-def k_fold_validation(df: pd.DataFrame, model_fn, use_tta=False, k_folds=4, epochs=10, batch_size=128, lr=0.01):
+def k_fold_validation(df: pd.DataFrame, model_fns, augm_fn, use_tta=False, k_folds=4, epochs=10, batch_size=128, lr=0.01):
+    if not isinstance(model_fns, list):
+        raise IOError('Please pass a list of model function(s)')
     device = _get_device()
 
     y = df['Category'].tolist()
     k_fold = StratifiedKFold(n_splits=k_folds, shuffle=True, random_state=42)
     fold_accuracies = []
+    fold_missed =[]
 
     for fold, (train_idx, val_idx) in enumerate(k_fold.split(np.zeros(len(df)), y)):
         print(f"Fold {fold+1}/{k_folds}")
@@ -31,10 +34,11 @@ def k_fold_validation(df: pd.DataFrame, model_fn, use_tta=False, k_folds=4, epoc
         train_df = df.iloc[train_idx].reset_index(drop=True)
         val_df = df.iloc[val_idx].reset_index(drop=True)
 
-        acc = train_and_evaluate(model_fn, train_df, val_df, epochs, batch_size, lr, use_tta, device)
-        fold_accuracies.append(acc)
-        print(f"Fold {fold+1} accuracy = {acc}")
-    mean_acc = sum(fold_accuracies)/len(fold_accuracies)
-    standard_dev = np.array(fold_accuracies).std()
+        evaluation = train_and_evaluate(model_fns, augm_fn, train_df, val_df, epochs, batch_size, lr, use_tta, device)
+        fold_accuracies.append(evaluation[0])
+        fold_missed.append(evaluation[1])
+        print(f"Fold {fold+1} accuracy = {evaluation[0]}")
+    mean_acc = np.mean(fold_accuracies)
+    standard_dev = np.std(fold_accuracies)
     print(f"Mean acc: {mean_acc} and STD {standard_dev}")
-    return fold_accuracies
+    return fold_accuracies, fold_missed

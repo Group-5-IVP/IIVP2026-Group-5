@@ -7,8 +7,7 @@ import pandas as pd
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 from dataset import train_csv_path, DigitDataset, train_img_folder_path
-from augmentation import _build_train_transform
-from predict import _predict_probs
+from predict import predict_ensemble
 import random
 import numpy as np
 
@@ -21,7 +20,7 @@ def save_model(model, file_name):
 def load_model(path, weights_only=True):
     return torch.load(path, weights_only=weights_only)
 
-def train_model(model_fn, epochs=10, seed=42, df=None, lr = 0.01, batch_size=128, device=None):
+def train_model(model_fn, augm_fn, epochs=10, seed=42, df=None, lr = 0.01, batch_size=128, device=None):
     _set_seed(seed)
     if df is None:
         train_df = pd.read_csv(train_csv_path)
@@ -37,7 +36,7 @@ def train_model(model_fn, epochs=10, seed=42, df=None, lr = 0.01, batch_size=128
 
     train_set = DigitDataset(csv_path=train_csv_path,
                              img_path=train_img_folder_path,
-                             transform=_build_train_transform(),
+                             transform=augm_fn,
                              df=train_df)
     loader = DataLoader(train_set,
                         batch_size=batch_size,
@@ -65,33 +64,37 @@ def train_model(model_fn, epochs=10, seed=42, df=None, lr = 0.01, batch_size=128
             scaler.update()
     return model
 
-def evaluate_model(model, val_df:pd.DataFrame, batch_size, use_tta, device=None):
-    if device is None:
-        device = torch.device(
-            'mps' if torch.backends.mps.is_available()
-            else 'cuda' if torch.cuda.is_available()
-            else 'cpu'
-        )
-    avg_probs = _predict_probs(
-        model, val_df, train_img_folder_path, train_csv_path,
-        device=device, batch_size=batch_size, use_tta=use_tta,
-    )
-    pred = avg_probs.argmax(dim=1)
-    targets = torch.tensor(val_df['Category'].tolist())
-    return (pred == targets).float().mean().item() * 100
+def evaluate_model(models, val_df:pd.DataFrame, batch_size, use_tta):
+    if not isinstance(models, list):
+        raise IOError('Please pass a list of model(s)')
 
-def train_and_evaluate(model_fn, train_df, val_df, epochs, batch_size, lr, use_tta, device=None):
+    pred_df, probs_df = predict_ensemble(
+        models=models, test_df=val_df, imgs_path=train_img_folder_path, use_tta=use_tta, batch_size=batch_size)
+
+    mask = pred_df['Category'] != val_df['Category']
+    missed = pred_df.loc[mask, ['Id']].copy()
+    missed ['Predicted'] = pred_df.loc[mask, ['Category']].values
+    missed ['Real_Label'] = val_df.loc[mask, ['Category']].values
+    accuracy = (pred_df['Category'] == val_df['Category']).mean() * 100
+
+    return accuracy, missed
+
+def train_and_evaluate(model_fns, augm_fn, train_df, val_df, epochs, batch_size, lr, use_tta, device=None):
+    if not isinstance(model_fns, list):
+        raise IOError('Please pass a list with model function(s).')
     if device is None:
         device = torch.device(
             'mps' if torch.backends.mps.is_available()
             else 'cuda' if torch.cuda.is_available()
             else 'cpu'
         )
-    model = train_model(
-        model_fn, df=train_df, epochs=epochs, lr=lr,
-        batch_size=batch_size, device=device,
-    )
-    return evaluate_model(model=model, val_df=val_df, batch_size=batch_size, use_tta=use_tta, device=device)
+    models = []
+    for fn in model_fns:
+        model = train_model(fn, augm_fn = augm_fn, df=train_df, epochs=epochs, lr=lr,
+        batch_size=batch_size, device=device,)
+        models.append(model)
+
+    return evaluate_model(models=models, val_df=val_df, batch_size=batch_size, use_tta=use_tta)
 
 # one conv block to be used in CNNs- 2 conv layers with batch norm and relu, followed by max pooling
 class ConvBlock(nn.Module):
