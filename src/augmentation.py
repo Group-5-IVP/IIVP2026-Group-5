@@ -161,6 +161,16 @@ class RandomStrokeTransform:
         return random_stroke(x, prob=self.prob, k=self.k)
 
 
+augments = {
+    'mild_stroke' : build_train_transform_mild(stroke=True),
+    'medium_stroke' : build_train_transform_medium(stroke=True),
+    'aggressive_stroke' : build_train_transform_aggressive(stroke=True),
+    'mild_no_stroke' : build_train_transform_mild(stroke=False),
+    'medium_no_stroke' : build_train_transform_medium(stroke=False),
+    'aggressive_no_stroke' : build_train_transform_aggressive(stroke=False)
+}
+
+
 
 
 

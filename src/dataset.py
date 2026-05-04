@@ -9,6 +9,8 @@ train_csv_path = f"{Path(__file__).parent.parent}/resources/train.csv"
 test_img_folder_path = f"{Path(__file__).parent.parent}/resources/test/test"
 train_img_folder_path = f"{Path(__file__).parent.parent}/resources/train/train"
 
+
+
 class DigitDataset(Dataset):
     def __init__(self, csv_path:str, img_path: str, transform=None, df=None, preload=True):
         if df is None:

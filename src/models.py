@@ -1,4 +1,6 @@
 import sys
+from functools import partial
+
 import torch.nn as nn
 import torch
 from torchvision.models import resnet18
@@ -225,3 +227,13 @@ def _set_seed(seed: int):
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
+
+#Dictionary with the models and their definitions
+models = {
+    "scnn_stride":   partial(SimpleCNN, filters=(32,64,128), n_convs=2, dropout=0.4, use_stride=True),
+    "scnn_dilated":  partial(SimpleCNN, filters=(32,64,128), n_convs=2, dropout=0.4, dilation=2),
+    "resnet_se":     partial(ResNet, filters=(32,64,128), blocks_per_stage=2, use_se=True),
+    "resnet_lean":   partial(ResNet, filters=(32,64,128), blocks_per_stage=1, use_se=False),
+    "scnn_baseline": partial(SimpleCNN, filters=(32,64,128), n_convs=2, dropout=0.4),
+    "scnn_3conv": partial(SimpleCNN, filters=(32,64,128), n_convs=3, dropout=0.4)
+}
