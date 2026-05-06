@@ -170,6 +170,20 @@ augments = {
     'aggressive_no_stroke' : build_train_transform_aggressive(stroke=False)
 }
 
+def get_transform_steps_report(degree=10, translate = (0.1, 0.1), scale=1.0, stroke_prob=1.0, stroke_k=3, shear=5, elastic_alpha=0.4,
+                               elastic_sigma=4.0, brightness=1.2, contrast=1.2, erasing_p=0.25, erasing_scale=0.08):
+    return [
+        ("grayscale", v2.Grayscale(num_output_channels=1)),
+        ("resize", v2.Resize((32, 32))),
+        ("affine", v2.RandomAffine(degrees=(degree,degree), translate=translate, scale=(scale,scale), shear=(shear,shear))),
+        ("elastic", v2.ElasticTransform(alpha=elastic_alpha, sigma=elastic_sigma)),
+        ("jitter", v2.ColorJitter(brightness=(brightness,brightness), contrast=(contrast,contrast))),
+        ("to_tensor", v2.Compose([v2.ToImage(), v2.ToDtype(torch.float32, scale=True)])),
+        ("stroke", RandomStrokeTransform(prob=stroke_prob, k=stroke_k)),
+        ("normalize", v2.Normalize(mean=[mean], std=[std])),
+        ("erasing", v2.RandomErasing(p=erasing_p, scale=(erasing_scale,erasing_scale))),
+    ]
+
 
 
 
